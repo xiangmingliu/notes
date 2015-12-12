@@ -152,9 +152,9 @@ Erlang Solutions 公司为大多数的操作系统提供了安装包， 通常�
 找到号的编码风格。本书的代码也会尽量遵守这里的风格
 
 当觉得技术细节满足不了我们的时候，我们可以访问官方的[邮件列表](http://www.erlang.org/static/doc/mailinglist.html)
-和[#erlang](irc://irc.freenode.net/erlang)
+和[#erlang](irc://irc.freenode.net/erlang)频道
 
-如果你想找一些cookbook或者一些既定方案， [trapexit](trapexit.org)是个不错的地方, 他们还将
+如果你想找一些cookbook或者一些既定方案， [trapexit](http://trapexit.org)是个不错的地方, 他们还将
 erlang的邮件列表镜像成了一个论坛和不错的wiki, 这对我们很有用。
 
 
