@@ -59,7 +59,7 @@ User switch command
 
 ```
 Eshell V6.4.1.5  (abort with ^G)
-1>"OH NO THIS SHELL IS UNRESPONSIVE!!! *hits ctrl+G*"
+1> "OH NO THIS SHELL IS UNRESPONSIVE!!! *hits ctrl+G*"
  User switch command
   --> k
   --> c
@@ -71,6 +71,7 @@ Eshell V6.4.1.5  (abort with ^G)
 Eshell V6.4.1.5  (abort with ^G)
 1> "YESS!"
 ```
-
+如果你看回上面的帮助文档，你将会看到我们可以启动一个远程shell。我现在不会讨论这个细节。但是你现在应该可以知道
+Erlang 虚拟机除了运行代码外还可以干什么。那么，现在就让我们开始吧（真正的开始）。
 
 
