@@ -58,7 +58,8 @@ User switch command
 会将shell杀死而不是将其中断。输入s会新建一个shell。
 
 ```
-<font color="#ff0000">"OH NO THIS SHELL IS UNRESPONSIVE!!! *hits ctrl+G*"</font>
+Eshell V6.4.1.5  (abort with ^G)
+1>"OH NO THIS SHELL IS UNRESPONSIVE!!! *hits ctrl+G*"
  User switch command
   --> k
   --> c
@@ -68,7 +69,7 @@ User switch command
     2* {shell,start,[]}
   --> c 2
 Eshell V6.4.1.5  (abort with ^G)
-1> <font color="#ff0000">"YESS!"</font>
+1> "YESS!"
 ```
 
 
