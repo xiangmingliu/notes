@@ -1,4 +1,5 @@
 -module(useless).
+-author("lxm").
 -export([add/2, hello/0, greet_and_add_two/1]).
 
 
@@ -13,4 +14,3 @@ hello() ->
 greet_and_add_two(X) ->
 	hello(),
 	add(X, 2).
-```
