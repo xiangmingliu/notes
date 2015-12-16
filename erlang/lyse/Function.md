@@ -205,5 +205,202 @@ wrong_age(_) ->
 分號(;)的作用和orelse是一樣的：如果第一個表達式失敗，它將會嘗試第二個，然後是下一個，直到
 有一個表達式成功或者所有的表達式都失敗。
 
+我們也可以在函數中使用除了比較和布爾運算之外的其它功能， 包括數學運算(`A*B/C >= 0`)和判斷
+數據類型的函數, 例如, `is_integer/1`, `is_atom/1`, 等等。（我們將在後續的章節回過頭來談論它們）.
+保護式的一個缺點是處於防止副作用的考慮它們不接受用戶自定義函數. Erlang不是純函數式語言(Haskell是)
+因爲它大量地依賴副作用：你可以做I/O, 在actor之間發送消息，或者在需要的時候拋出異常。不存在簡單的
+方法來判斷你在保護式中使用的函數是否包含了打印文本的語句或通過很多個函數從句來捕獲重要的錯誤。因此，
+Erlang選擇了不相信我們(也許這是正確的選擇).
 
+那就是說， 你需要能夠理解保護式的基本語法， 以便在遇到的時候能夠理解它們。
+
+```
+註：我已經拿保護式中的`,`和`;`與操作符`andalso`和`orelse`做了類比. 但是它們並不完全相同。前面一對
+將會捕獲異常而後一對則不會。這意味着在保護式`X >= N; N >= 0`,中， 如果第一個表達式發生了異常，第二
+個表達式仍然被計算，整個保護式仍然可能會通過; 相反， 如果在表達式 `X >= N orelse N >= 0` 中,如果第
+一個表達式發生異常， 第二個表達式將會被忽略，並且整個表達式都會失敗。
+
+但是(總是會有一個'但是'), 在保護式中， 只有 `andalso`和`orelse`能被嵌套使用。就是說 
+`(A orelse B) andalso C` 是合法的保護式， `(A;B), C` 卻不是。所以最好在需要的時候混合使用它們
+```
+If語句！？
+============
+
+`If`的作用和保護式的作用類似， 使用和保護式一樣的語法, 但是我們在函數頭之外使用它。事實上, `if`從句
+被稱爲保護式模式。Erlang的`if`和其它語言中的`if`不太一樣； 和它們相比, Erlang中的`if`顯得有點異類，
+如果給它取個別的名字， 也許現在人們對它的接受度還高一點。當跨進Erlang的王國， 你需要拋棄以往所有關於
+`if`的認識。
+
+爲了看清楚if表達式和保護式的相似性， 請看下面的例子：
+
+```
+-module(what_the_if).
+-export([heh_fine/0]).
+
+heh_fine() ->
+        if 1 =:= 1 ->
+                   works
+        end,
+        if 1 =:= 2; 1 =:= 1 ->
+                   works
+        end,
+        if 1 =:= 2, 1 =:= 1 ->
+                   fails
+        end.
+```
+將代碼保存到文件`what_the_if.erl`中， 我們來試試看會發生什麼:
+```
+1> c(what_the_if).
+./what_the_if.erl:12: Warning: no clause will ever match
+./what_the_if.erl:12: Warning: the guard for this clause evaluates to 'false'
+{ok,what_the_if}
+2> what_the_if:heh_fine().
+** exception error: no true branch found when evaluating an if expression
+in function  what_the_if:heh_fine/0
+```
+啊，不！ 編譯器警告我們說第12行的if(`1=:=1, 1=:=2`)裏面沒有從句會被匹配因爲
+唯一的從句返回了`false`. 請記住一點，Erlang中所有的東西都要有返回值，`if`表達式
+也不例外。因此， 當Erlang不能找到一個成功的保護式時， 它崩潰了：它不直到該返回什麼。
+因此， 我們需要添加一個匹配所有情況的分支。在大多數語言中， 我們會使用`else`來做這
+件事。在Erlang中, 我們使用`true`(這就能解釋爲什麼虛擬機發狂而時候它拋出了'沒有找到true分支'):
+```
+oh_god(N) ->
+    if N =:= 2 -> might_succeed;
+       true -> always_does
+    end
+```
+讓我們來測試一下這個新函數（讓那個舊的函數呆在那， 繼續發出警告，我們讓它呆在那給我們留個提醒）： 
+
+```
+3> c(what_the_if).
+./what_the_if.erl:12: Warning: no clause will ever match
+./what_the_if.erl:12: Warning: the guard for this clause evaluates to 'false'
+{ok,what_the_if}
+4> what_the_if:oh_god(2).
+might_succeed
+5> what_the_if:oh_god(3).
+always_does
+```
+
+下面這個例子向我們展示怎麼在一個`if`表達式中使用多個保護式. 這個例子也演示了我們怎麼
+利用`所有的表達式都必須返回東西`這一點：我們將`if`表達式的值綁定到Talk變量中，然後在
+元組裏把它和一個字符串連接.當我們閱讀代碼的時候， 我們可以清晰地看到缺少`true`會讓事情
+變得一團糟糕. 因爲Erlang中沒有null值(像lisp中的nill， C的NULL， Python中的None等):
+
+```
+%% note , this one would be better as a pattern match in function heads!
+%% I'm doing it this way for the sake of the example.
+help_me(Animal) ->
+        Talk = if Animal == cat -> "meow";
+                  Animal == beef -> "mooo";
+                  Animal == dog -> "bark";
+                  Animal == tree -> "bark";
+                  true -> "fgdadfgna"
+               end,
+        {Animal, "says " ++ Talk ++ "!"}
+```
+
+讓我們來試一下：
+```
+6> c(what_the_if).
+./what_the_if.erl:12: Warning: no clause will ever match
+./what_the_if.erl:12: Warning: the guard for this clause evaluates to 'false'
+{ok,what_the_if}
+7> what_the_if:help_me(dog).
+{dog,"says bark!"}
+8> what_the_if:help_me("it hurts!").
+{"it hurts!","says fgdadfgna!"}
+```
+你可能會像其他Erlang程序員那樣感到疑惑， 爲什麼不使用`else`而使用`true`來控制流程呢？
+畢竟`else`更爲人們所熟知。Richard O'Keefe在Erlang的郵件列表中給出了下列的答案。我直接把
+它引用過來了， 因爲找不出更好的答案：
+
+```
+我們對`else`確實更熟悉，但這並不意味着它試個好東西。我知道在Erlang中通過編寫';true->'很
+容易達到`else`的效果， 但是我們幾十年的變成心理學告訴我們這不是一個好的主意。我已經開始尋找
+其它方式：
+                                    vs
+if X > Y -> a()                                 if X > Y -> a()
+  ; true -> b()                                  ; X =< Y -> b()
+end                                             end
+if X > Y -> a()                                 if X > Y -> a()
+ ; X < Y -> b()                                  ; X < Y -> b()
+ ; true  -> c()                                  ; X ==Y -> c()
+end                                             end
+我在編寫這些代碼的時候感到很惱火， 但這讀起來清晰多了。
+```
+應該避免使用`else`或`true`, ，當我們構造覆蓋所有邏輯情況
+的分支而不是使用`catch all`分支, `if`更加容易閱讀
+
+
+Case分支
+===========
+
+如果`if`表達式像一個保護式， 那麼`case ... of`則更像整個函數頭：我們可以對每個參數使用複雜
+的模式匹配，而且能在參數之上構建保護式！
+
+因爲我們對語法越來越熟悉， 所以已經不需要太多的例子。我們來寫一個應用到set(包含不重複值的集合)
+上的append函數， 我們用無序列表來表示這個set。從效率上看， 這應該是最糟糕的實現，但是現在我們
+關心的是語法：
+
+```
+insert(X,[]) ->
+    [X];
+insert(X,Set) ->
+    case lists:member(X,Set) of
+        true  -> Set;
+        false -> [X|Set]
+    end.
+```
+如果我們以一個空的set和X來調用這個函數， 它將返回一個包含X的list。否則
+`lists:member/2`將會檢查元素是否是list的成員，如果是， 它將返回`true`,
+反之返回`false`, 在這個例子中， 如果元素已經在list中了，我們就不會修改這個list，否則
+我們將X添加爲list的第一個元素.
+
+上面的例子中， 只是使用了簡單的模式匹配, 我們可以使用更複雜一點的：
+```
+beach(Temperature) ->
+    case Temperature of
+        {celsius, N} when N >= 20, N =< 45 ->
+            'favorable';
+        {kelvin, N} when N >= 293, N =< 318 ->
+            'scientifically favorable';
+        {fahrenheit, N} when N >= 68, N =< 113 ->
+            'favorable in the US';
+        _ ->
+            'avoid beach'
+    end.
+```
+這裏， “現在是否是去海濱遊玩”的答案使用3種不同的溫度系統給出：攝氏度，開爾文和華氏溫度。
+我們還混合使用模式匹配和保護式以便能夠滿足所有的場景。就像前面指出的那樣， `case ... of` 表達式
+更像是一堆帶保護式的函數頭。事實上， 我們可以使用以下方式來編寫我們的代碼：
+```
+beachf({celsius, N}) when N >= 20, N =< 45 ->
+    'favorable';
+...
+beachf(_) ->
+    'avoid beach'.
+```
+這就有一個問題了， 做條件判斷的時候什麼時候使用`if`, 什麼時候使用`case ... of`, 什麼時候使用函數.
+
+
+該使用哪個？
+===========
+
+什麼情況下該使用哪個是個難以回答的問題。函數調用和`case ... of`之間的不同之處非常小：事實上，它們的
+底層實現是一樣的， 使用哪個在性能上沒什麼差別。一個不同的地方在與當有多個參數的時候: `function(A, B) -> ... end.`
+可以讓保護式和值去跟A和B進行匹配，但是我們卻需要像下面那樣case表達式:
+```
+case {A,B} of
+    Pattern Guards -> ...
+end.
+```
+這種方式很少見， 它很有可能會讓閱讀它的人感到吃驚。在這種場景中， 使用函數可能更加恰當。同樣，我們上面所寫的`insert/2`函數
+比寫兩個函數來跟蹤簡單的`true`和`false`值更加簡潔。
+
+另外一個問題是既然已經有了`case`和函數， 爲什麼還需使用`if`? `if`背後的道理很簡單: 它讓我們能夠使用不帶模式匹配的保護式。
+
+當然， 上面說的這些都只是個人喜好， 對這些問題沒有一成不變的答案。這個話題在Erlang社區中仍然時不時地被拿出來討論。沒有人
+會因爲你的選擇而視你爲異端， 只要它容易理解就可以了。就像Ward Cunningham所說的，“乾淨的代碼就是當你看到一段代碼的時候，
+它就是你所期望的那樣子”
 
