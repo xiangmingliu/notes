@@ -97,15 +97,97 @@ is_integer/1        is_list/1           is_number/1
 is_pid/1            is_port/1           is_record/2        
 is_record/3         is_reference/1      is_tuple/1    
 ```
-我們可以像使用其它保護式表達式那樣使用它們。
+我們可以像使用其它保護式表達式那樣使用它們。你可能會感到好奇， 沒有一個函數能夠計算出
+給定變量的類型（`例如type_of(X) -> Type`）.答案很簡單。Erlang只針對正確的情況進行編程：
+我們只針對我們知道將要發生的和我們所期望的情況編程。任何其它情況都會儘可能快地引發錯誤。
+雖然這聽起來很愚蠢， 我們將會在錯誤和異常處理章節進行解釋， 希望到時你能清晰地理解這點。
+
+```
+註：允許使用在保護式表達式的函數中，類型測試內置函數佔了大半， 剩餘的也是內置函數，但它們
+並不用於類型測試， 這些函數包括：
+```
+abs(Number), bit_size(Bitstring), byte_size(Bitstring), element(N, Tuple), float(Term), hd(List), 
+length(List), node(), node(Pid|Ref|Port), round(Number), self(), size(Tuple|Bitstring), tl(List), 
+trunc(Number), tuple_size(Tuple).
+```
+
+函數node/1和self/0和分佈式以及進程/actor有關。最後我們會使用到它們， 但在那之前我們還要介紹相關概念。
+```
+看起來Erlang的數據結構非常有限， 但是我們可以用元組和列表來構造其它複雜的數據結構，沒啥好擔心的。作爲
+一個簡單的例子, 二叉樹的節點可以表示爲：`{node, Value, Left, Right}`, 這裏Left和Right或者是和這裏一樣
+的節點， 或者是空元組。我也可以將自己表示爲:
+
+```
+{person, {name, <<"Fred T-H">>},
+         {qualities, ["handsome", "smart", "honest", "objective"]},
+         {faults, ["liar"]},
+         {skills, ["programming", "bass guitar", "underwater breakdancing"]}}
+```
+這個例子說明元組和列表， 並給它們填充數據，我們就可以構造複雜的數據結構， 並建立處理它們的函數。
+```
+更新：
+R13B04新加了內置函數`binary_to_term/2`, 該函數和`binary_to_term/1`都可以讓我們將數據反序列化，但
+它允許我們通過第二個參數提供一些選項，如果你傳進`[safe]`, 當二進制數據中存在未知的原子或匿名函數時，
+它將不會反序列化， 因爲這將會耗盡內存。
+```
+類型成癮者
+============
+這一小節是爲那些因爲種種原因脫離不了靜態類型系統的讀者。我們將會談論一些高級一點的理論，並不是所有的
+讀者都能理解這些內容。我還將在這裏介紹Erlang中用於做靜態類型分析的工具， 那樣我們就可以安全地定義自己
+的類型了。我們介紹這些工具是爲了讀者能在後續的章節中能夠理解它們。但是對於編寫可靠的Erlang程序它們不
+是必須的。因爲我們後續還會介紹它們， 所以關於安裝運行它們的細節在這裏就先不介紹了。再次申明， 這一小結
+是給那些無法在高級類型系統下工作的讀者準備的。
+
+這些年， 很多人嘗試過在Erlang之上構建類型系統。其中的一次在1997年，由Simon Marlow主導， Glasgow Haskell
+編譯器的主要開發者， 和Philip Wadler，負責Haskell的設計，對monads概念提供了理論支持, Joe Armstrong在後來的
+論文中寫到：
+```
+一天Phil給我打電話然後說 a)Erlang需要一個類型系統, b)它已經寫了一個類型系統的原型, c)它由一年的公休並打算爲
+Erlang寫一個類型系統， 它問我們對此是否感興趣？ 我們的回答是----"是的，感興趣"
+
+Phi Wadler和Simon Marlow花了一年的時間來完成類型系統並將結果發表在[20]. 項目的結果由點讓人失望。剛開始，只能
+對語言中的一個子集進行類型檢查， 最大的刪節是沒有對進程類型和進程經間的消息做類型檢查.
+```
+進程和消息是Erlang的核心特性， 這就能夠解釋爲什麼這個類型系統沒有被加到語言中。其它爲Erlang添加類型系統的努力
+也失敗了。HiPE項目(爲了讓Erlang跑得更快)的結果產生了Dialyzer. 今天仍然在使用的靜態分析工具，它有自己的類型推斷
+機制。
+
+它所使用的類型系統基於成功類型， 一個不同於Hindley-Milner 和軟類型系統的概念。成功類型在概念上很簡單：類型推斷不
+會嘗試爲所有的表達式都找出它們的類型， 但是它保証它推斷出來的類型都是正確的， 而它所發現的類型錯誤就真的是錯誤。
+
+最好的例子就是函數`and`的實現， 它接受2個布爾值， 如果它們都是`true`就返回`true`， 否則返回`false`, 在Haskell的
+類型系統中， 這寫作`and ::bool -> bool ->bool`, 如果在Erlang中實現它， 它應該長下面這樣：
+
+```
+and(false, _) -> false;
+and(_, false) -> false;
+and(true,true) -> true.
+```
+在成功類型系統中， 從函數推導出來的類型應該是 `and(_, _) -> bool()`, _代表任何東西.這很好解釋， 當我們在Erlang中
+以`false`和`42`來調用這個函數時， 結果將會是`false`. 參數中只要存在一個是false， 就一定可以成功調用該函數. 如果你在
+非Erlang環境中這麼調用函數的話， ML類型可能會拋出一個錯誤，並提示你修改（這常常會把用戶嚇一跳），如果你閱讀了論文
+[implementation of success types](http://www.it.uu.se/research/group/hipe/papers/succ_types.pdf)的話可能會對這一點
+更加清晰。我鼓勵任何類型重度患者都去閱讀一下這篇論文， 它是一種很有趣而又具有現實意義的定義。
+
+類型定義和函數註解在Erlang增強計劃8([EEP 8](http://www.erlang.org/eeps/eep-0008.html)) 中詳細描述。如果你希望在Erlang中
+使用成功類型，請學習 [TypEr application](http://user.it.uu.se/~tobiasl/publications/typer.pdf) 和Dialyzer, 它們都包含在標準
+版本中。如果想使用它們, 請輸入`$ typer --help` 和 `$ dialyzer --help`， Windows用戶請輸入`typer.exe --help`和`dialyzer.exe --help`.
+
+TypEr 用來給函數產生類型註解。 當應用到這個小的[FIFO實現](http://learnyousomeerlang.com/static/erlang/fifo.erl)上時， 它產生下列的
+類型註解：
+```
+%% File: fifo.erl
+%% --------------
+-spec new() -> {'fifo',[],[]}.
+-spec push({'fifo',_,_},_) -> {'fifo',nonempty_maybe_improper_list(),_}.
+-spec pop({'fifo',_,maybe_improper_list()}) -> {_,{'fifo',_,_}}.
+-spec empty({'fifo',_,_}) -> bool().
+```
+
+它推導出的結果相當正確。應該避免非正規列表因爲`lists:reverse/1`不支持它們...
 
 
-
-
-
-
-
-
+註： 還有部分未翻譯
 
 
 
