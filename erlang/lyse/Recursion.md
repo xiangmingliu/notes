@@ -290,5 +290,158 @@ VM 會避免存儲當前的棧幀。這樣， 尾遞歸也可以發生在多個�
 
 快排
 ==========
+我現在假設你已經對遞歸和尾遞歸很熟悉了，但是爲了加強這點， 我再舉一個複雜一點
+的例子，快排！是的， 這是用來證明“我可以寫很簡潔的代碼”的權威例子。快排一個很
+直接的實現就是把列表的第一個元素當成哨兵，然後將比它小的元素放到一個列表中，比它
+大的元素放到另一個新的列表中. 我們繼續對新生成的列表應用以上算法， 直到列表變得
+越來越小。直到列表爲空。這個算法很初級， 因爲聰明一點的算法會挑選一個較優的哨兵，
+那樣能讓排序過程跑得更快。我們這個例子不考慮這點。
 
+這個算法中我們需要兩個函數： 一個函數負責將列表分割成比較小的列表和比較大的列表，
+第二個函數負責調用該函數並將它們組織在一起。首先， 我們來編寫這個膠水函數：
+
+```
+quicksort([]) -> [];
+quicksort([Pivot|Rest]) ->
+        {Smaller, Larger} = partition(Pivot, Rest, [], []) ,
+        quicksort(Smaller) ++ [Pivot] ++ quicksort(Larger).
+```
+讓我們再來看看`partition/4`函數：
+```
+partition(_, [], Smaller, Larger) -> {Smaller, Larger};
+partition(Pivot, [H|T], Smaller, Larger) -> 
+        if H =< Pivot -> partition(Pivot, T, [H|Smaller], Larger);
+           H > Pivot -> partition(Pivot, T, Smaller, [H|Larger])
+        end.
+```
+現在可以運行我們的快排函數了。 如果你曾在因特網上搜索過Erlang的例子，你可能見到過快排的另一個
+實現， 那個例子更簡單，並且容易閱讀， 但是它使用了列表推導。最容易被替換的地方是創建新列表的`partition/4`函數:
+```
+lc_quicksort([]) -> [];
+lc_quicksort([Pivot|Rest]) ->
+        lc_quicksort([Smaller || Smaller <- Rest, Smaller =< Pivot])
+        ++ [Pivot] ++
+        lc_quicksort([Larger || Larger <- Rest, Larger > Pivot]).
+```
+這兩個版本的最大不同點是可讀性， 但是後面這個版本爲了將列表分成兩部分， 需要遍歷列表兩次。這是犧牲性能以獲得可讀性，但是
+真正的失敗者是我們， 因爲標準庫裏已經由一個了, 真實場景中請使用`lists:sort/1`.
+
+```
+不要盲從：
+這些簡潔的例子對教育是很由幫助的， 但是它們的性能不行。很多函數式編程語言書籍都沒提到這點！首先，這裏的兩個實現都需要不止一次
+值和哨兵是否相等。其實我們可以同時返回3個列表： 比哨兵小的元素， 比哨兵大的元素和於哨兵相等的元素， 這樣可以大大提升效率。
+
+另一個問題是當將元素attach到哨兵上時，我們需要不止一次遍歷所有被分割的列表。我們可以通過在將列表分割成3部分的同時將它們鏈接起來。
+如果你對這個算法感興趣， 可以看看[recursive.erl](http://learnyousomeerlang.com/static/erlang/recursive.erl)中最後一個實現(`bestest_qsort/1`)
+
+這些快排例子中值得一提的是它們對所有的數據類型都適用， 甚至是包含列表的元組。你可以試一下， 它們確實能工作！
+```
+
+不僅僅是列表
+============
+
+通過閱讀這一章， 你可能會開始思考遞歸在Erlang中主要是用來處理列表的。雖然列表是一個很好演示遞歸的例子， 但遞歸的作用不止於此。
+爲了多樣性考慮， 我們再來看看怎麼構建二叉樹， 然後從中讀取數據。
+
+首先，二叉樹的定義很重要。在我們的例子中，它是倒掛的一寫列節點。節點是包含鍵值對和另外兩個節點的元組，在這兩個節點中，一個節點
+的key會比當前節點小，而另外一個節點的key會比當前節點大。所以這是一個遞歸定義！ 一棵樹是包含若干節點的節點， 每個節點又包含若干節點，
+這些被包含的節點又包含若干節點。但是不能這麼一直包含下去，所以節點也可以包含空節點。
+
+元組是表示節點的最佳數據結構。在我們的實現中， 我們可以把這些元組定義爲:`{node, {Key, Value, Smaller, Larger}}`(帶標籤的元組！)，
+Smaller和Larger可以是類似的節點或者空節點`({node, nil})`, 我們不需要更複雜的概念了。讓我們來新建一個`tree`模塊。第一個函數 `empty/0`
+會返回一個空的節點。空節點是一顆新樹的開始， 我們稱之爲根：
+
+```
+-module(tree).
+-export([empty/0, insert/3, lookup/2]).
+
+empty() -> {node, 'nil'}.
+```
+通過使用函數將樹的表示封裝起來，我們向不需要知道樹是怎麼構建的人們隱藏了樹的實現。那些信息只有在模塊中才能訪問到。如果你想改變節點的表示
+方法， 我們就不會影響到外部代碼。
+
+爲了向樹添加內容， 我們必須首先理解怎麼遞歸地在樹上導航。讓我們首先來尋找基準情況。因爲一顆空的樹就是一個空的節點，所以我們的基準情況就是
+一個空的節點。因此每當我們到達一個空的節點， 我們就可以在這裏添加我們的鍵值對。在大部分的時間裏， 我們的代碼都在尋找一個空的節點以向其添加
+內容。
+
+爲了從根部尋找到一個空的節點，我們需要根據Smaller和Larger來進行導航。如果新的key小於當前節點的key，我們會嘗試在Smaller中尋找空節點，反之則
+在Larger中尋找。還有最後一種情況：如果key和當前節點的key相同怎麼辦？這裏我們有兩個選項：讓程序崩潰或者將當前節點的值替換爲新值。我們將採取
+後一種情況。下面是實現：
+
+```
+insert(Key, Value, {node, 'nil'}) -> 
+        {node, {Key, Value, {node, 'nil'}, {node, 'nil'}}};
+insert(NewKey, NewValue, {node, {Key, Value, Smaller, Larger}}) when NewKey < Key ->
+        {node, {Key, Value, insert(NewKey, NewValue, Smaller), Larger}};
+insert(NewKey, NewValue, {node, {Key, Value, Smaller, Larger}}) when NewKey > Key ->
+        {node, {Key, Value, Smaller, insert(NewKey, NewValue, Larger)}};
+insert(NewKey, NewValue, {node, {Key, Value, Smaller, Larger}}) when NewKey > Key ->
+        {node, {NewKey, NewValue, Smaller, Larger}};
+```
+注意， 這裏函數返回一顆新的樹。這是因爲函數式語言中的單次賦值。雖然這看起來不高效，但是兩個版本的樹的底層結構有時候是一樣的，這些一樣的部分
+會被共享， 虛擬機只在需要的時候拷貝它們。
+
+這個模塊還剩下的一個函數是`lookup/2`, 它會根據給定的key在樹中查找相應的值。它的邏輯和在樹中添加內容很類似。 我們遍歷節點，檢查給定的key和當前
+節點的key是否相等，比它小， 還是比它大。我們有兩種基準情況：一種是節點是一個空節點(在樹中沒有對應的key)， 一種是找到相應的key。因爲我們不想讓
+我們的程序因爲找不到相應的key就崩潰，所以在找不到的時候我們返回'undefined',否則， 我們返回{ok, Value}. 如果我們只返回Value的話就沒法區分我們是
+找到了還是沒找到。通過對返回結果進行封裝， 我們就知道結果代表了成功還是失敗，我們來看看實現函數：
+
+```
+lookup(_, {node, 'nil'}) ->
+        undefined;
+lookup(Key, {node, {Key, Value, _, _}}) ->
+        {ok, Value};
+lookup(Key, {node, {NodeKey, _, Smaller, _}}) when Key < NodeKey ->
+        lookup(Key, Smaller);
+lookup(Key, {node, {_, _, _, Larger}}) ->
+        lookup(Key, Larger).
+```
+讓我們來試試我們的新樹：
+```
+1> T1 = tree:insert("Jim Woodland", "jim.woodland@gmail.com", tree:empty()).
+{node,{"Jim Woodland","jim.woodland@gmail.com",
+        {node,nil},
+        {node,nil}}}
+2> T2 = tree:insert("Mark Anderson", "i.am.a@hotmail.com", T1).
+{node,{"Jim Woodland","jim.woodland@gmail.com",
+        {node,nil},
+        {node,{"Mark Anderson","i.am.a@hotmail.com",
+                {node,nil},
+                {node,nil}}}}}
+3> Addresses = tree:insert("Anita Bath", "abath@someuni.edu", tree:insert("Kevin 
+   Robert", "myfairy@yahoo.com", tree:insert("Wilson Longbrow",
+   "longwil@gmail.com", T2))).
+{node,{"Jim Woodland","jim.woodland@gmail.com",
+       {node,{"Anita Bath","abath@someuni.edu",
+              {node,nil},
+              {node,nil}}},
+       {node,{"Mark Anderson","i.am.a@hotmail.com",
+               {node,{"Kevin Robert","myfairy@yahoo.com",
+                      {node,nil},
+                      {node,nil}}},
+               {node,{"Wilson Longbrow","longwil@gmail.com",
+                      {node,nil},
+                      {node,nil}}}}}}}
+```
+
+現在， 我們可以來查詢email地址了：
+
+```
+4> tree:lookup("Anita Bath", Addresses).
+{ok, "abath@someuni.edu"}
+5> tree:lookup("Jacques Requin", Addresses).
+undefined
+```
+這個例子展示了我們使用遞歸數據結構來構造的函數式地址簿， 而不是列表！Anita Bath 
+現在...
+
+```
+註： 我們的實現是非常簡單的：我們不支持像刪除這樣通用的操作， 或者對樹進行重新平衡以便讓查找更快。如果你對這些感興趣
+可以學習Erlang的`gb_trees`模塊(`otp_src_R<version>B<revision>/lib/stdlib/src/gb_trees.erl`).現實中， 我們也應該使用
+這個模塊的實現而不是我們自己的， 不用總是重複造輪子！
+```
+
+使用遞歸的方式思考
+================
+欠一小節
 
